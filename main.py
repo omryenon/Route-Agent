@@ -1,6 +1,6 @@
 # app/main.py
 import os, time, threading
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -22,8 +22,8 @@ _latest_alerts: List[Dict[str, Any]] = []
 _subscribers: List[Any] = []
 
 class ConfigUpdate(BaseModel):
-    pollSeconds: float | None = None
-    safetyRadiusMeters: float | None = None
+    pollSeconds: Optional[float] = None
+    safetyRadiusMeters: Optional[float] = None
 
 def _poll_loop():
     global _latest_alerts
