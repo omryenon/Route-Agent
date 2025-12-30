@@ -5,10 +5,6 @@
 __pycache__/
 *.pyc
 
-# Environment files
-.env
-.env.*
-
 # OS / editor junk
 .DS_Store
 .vscode/
