@@ -6,6 +6,21 @@ from pyproj import Transformer
 # lon/lat -> UTM meters (EPSG:32636)
 to_m = Transformer.from_crs("EPSG:4326", "EPSG:32636", always_xy=True)
 
+def overlap_area_m2(path_a: List[Dict[str, float]],
+                    path_b: List[Dict[str, float]],
+                    safety_radius_m: float = 15.0) -> float:
+    if not path_a or len(path_a) < 2 or not path_b or len(path_b) < 2:
+        return 0.0
+
+    a_pts = [to_m.transform(p["lng"], p["lat"]) for p in path_a]
+    b_pts = [to_m.transform(p["lng"], p["lat"]) for p in path_b]
+
+    a_corr = LineString(a_pts).buffer(safety_radius_m)
+    b_corr = LineString(b_pts).buffer(safety_radius_m)
+
+    inter = a_corr.intersection(b_corr)
+    return float(inter.area) if not inter.is_empty else 0.0
+
 def _line_meters(path: List[Dict[str, float]]) -> LineString:
     pts = []
     for p in path:

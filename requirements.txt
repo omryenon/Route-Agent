@@ -5,3 +5,4 @@ python-dotenv
 shapely
 pyproj
 pydantic
+requests
