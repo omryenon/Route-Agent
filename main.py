@@ -49,6 +49,7 @@ def _fetch_candidates(server_url: str, start: Dict[str, float], end: Dict[str, f
         "start": start,
         "end": end,
         "dangerZones": [],
+        "random_runs": 3,
         "algorithms": CANDIDATE_ALGOS,
         "include_on_road": False,
         "use_crop": CANDIDATES_USE_CROP
@@ -102,8 +103,8 @@ def _poll_loop():
                     }
                     continue
 
-                start = path[0]
-                end = path[-1]
+                start = path[0] # first point in the path
+                end = path[-1]  # last point in the path
 
                 # 5) בקש מועמדים מהשרת של הרכב
                 try:
@@ -158,7 +159,8 @@ def _poll_loop():
                     "server_url": server_url,
                     "timestamp": time.time()
                 }
-
+                requests.post(f"{server_url}/agent/recommendation",
+                  json=_recommendations[addr], timeout=5)
         except Exception as e:
             _latest_alerts = [{"type": "ERROR", "message": str(e)}]
 
@@ -197,3 +199,12 @@ def alerts_stream():
 @app.get("/recommendations")
 def get_recommendations():
     return {"recommendations": _recommendations, "count": len(_recommendations)}
+
+@app.get("/recommendations/list")
+def get_recommendations_list():
+    # ממיר את ה-dict לרשימה
+    items = list(_recommendations.values())
+    # סדר לפי זמן (הכי חדש למעלה)
+    items.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+    return {"items": items, "count": len(items)}
+
