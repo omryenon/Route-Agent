@@ -23,6 +23,10 @@ CAR_SERVER_MAP = json.loads(CAR_SERVER_MAP_RAW)
 CANDIDATE_ALGOS = json.loads(os.getenv("CANDIDATE_ALGOS", '["dijkstra","astar","random","combined"]'))
 CANDIDATES_USE_CROP = os.getenv("CANDIDATES_USE_CROP", "true").lower() == "true"
 
+# llm settings
+LLM_PLANNER_URL = os.getenv("LLM_PLANNER_URL", "http://localhost:9100")
+LLM_ENABLED = os.getenv("LLM_ENABLED", "true").lower() == "true"
+
 
 app = FastAPI(title="Route Conflict Agent")
 
@@ -57,6 +61,28 @@ def _fetch_candidates(server_url: str, start: Dict[str, float], end: Dict[str, f
     r = requests.post(f"{server_url}/route/candidates", json=payload, timeout=20)
     r.raise_for_status()
     return r.json()
+
+def _call_llm_planner(car_addr: str, start: dict, end: dict, ranking: list) -> dict:
+    """
+    ranking: list of dicts like:
+      { "algorithm": "...", "score": ..., "conflict_area_m2": ..., "length_m": ... }
+    """
+    # build small inputs (keep it lightweight)
+    conflicts_summary = {r["algorithm"]: r["conflict_area_m2"] for r in ranking}
+    candidates = [{"algorithm": r["algorithm"], "metrics": {"length_m": r["length_m"]}} for r in ranking]
+
+    payload = {
+        "car": car_addr,
+        "start": start,
+        "end": end,
+        "candidates": candidates,
+        "conflicts_summary": conflicts_summary
+    }
+
+    r = requests.post(f"{LLM_PLANNER_URL}/plan", json=payload, timeout=(3,300))
+    r.raise_for_status()
+    return r.json()
+
 
 def _poll_loop():
     global _latest_alerts, _recommendations
@@ -149,6 +175,20 @@ def _poll_loop():
 
                 best = scored[0] if scored else None
 
+                # 6.5) Ask LLM planner (optional)
+                llm = None
+                if (LLM_ENABLED):
+                    print("llm enabled")
+                else:
+                    print("llm disabled")
+                if LLM_ENABLED and scored:
+                    try:
+                        # send a small subset (Top-N) to keep prompt short
+                        llm = _call_llm_planner(addr, start, end, scored[:6])
+                    except Exception as e:
+                        llm = {"error": str(e)}
+
+
                 # 7) שמור המלצה לרכב הזה
                 _recommendations[addr] = {
                     "car": addr,
@@ -157,7 +197,8 @@ def _poll_loop():
                     "best": best,
                     "ranking": scored[:5],
                     "server_url": server_url,
-                    "timestamp": time.time()
+                    "timestamp": time.time(),
+                    "llm": llm
                 }
                 requests.post(f"{server_url}/agent/recommendation",
                   json=_recommendations[addr], timeout=5)
